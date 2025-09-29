@@ -1,5 +1,3 @@
-# week08/k8s/order-service.yaml
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -45,6 +43,8 @@ spec:
             configMapKeyRef:
               name: ecomm-config-w08e1
               key: PRODUCT_SERVICE_URL
+      imagePullSecrets:
+      - name: acr-secret
 ---
 apiVersion: v1
 kind: Service
