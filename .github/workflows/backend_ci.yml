@@ -1,12 +1,7 @@
-# week08/.github/workflows/backend_ci.yml
-
 name: Backend CI - Test, Build and Push Images to ACR
 
 on:
-  # Manual trigger
   workflow_dispatch:
-
-  # Automatically on pushes to main branch
   push:
     branches:
       - main
@@ -15,9 +10,8 @@ on:
       - '.github/workflows/backend_ci.yml'
 
 env:
-  # Full ACR login server (used for docker builds/pushes)
-  ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
-  # Unique tag per run
+  # Hardcode the full ACR login server (safer than relying on secret expansion)
+  ACR_LOGIN_SERVER: tejaacr98765.azurecr.io
   IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
 
 jobs:
