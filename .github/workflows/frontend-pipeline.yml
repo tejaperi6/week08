@@ -1,52 +1,48 @@
 name: Frontend Pipeline
 
 on:
-  workflow_call:   # reusable, triggered from complete-pipeline.yml
+  workflow_call:
 
 jobs:
   lint-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
-      - name: Install Node
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v3
         with:
           node-version: 18
-
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Lint
-        run: npm run lint || echo "No lint configured"
-
-      - name: Run Tests
-        run: npm test || echo "No tests configured"
+      - run: npm install
+      - run: npm run lint || echo "⚠️ No lint configured"
+      - run: npm test || echo "⚠️ No tests configured"
 
   build:
     runs-on: ubuntu-latest
     needs: lint-test
     steps:
       - uses: actions/checkout@v3
-
-      - name: Docker Login
-        run: echo "${{ secrets.AZURE_CREDENTIALS }}" | docker login myregistry.azurecr.io -u ${{ secrets.AZURE_REGISTRY_USERNAME }} --password-stdin
-
-      - name: Build & Push Docker Image
+      - name: Azure Docker Login
+        run: echo "${{ secrets.AZURE_CREDENTIALS }}" | docker login ${{ secrets.AZURE_CONTAINER_REGISTRY }} -u ${{ secrets.AZURE_REGISTRY_USERNAME }} --password-stdin
+      - name: Build & Push Frontend Docker Image
         run: |
-          docker build -t myregistry.azurecr.io/frontend:${{ github.sha }} frontend/
-          docker push myregistry.azurecr.io/frontend:${{ github.sha }}
+          docker build -t ${{ secrets.AZURE_CONTAINER_REGISTRY }}/frontend:${{ github.sha }} frontend/
+          docker push ${{ secrets.AZURE_CONTAINER_REGISTRY }}/frontend:${{ github.sha }}
 
   deploy-staging:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/develop'
     steps:
-      - run: echo "Deploying frontend to staging environment"
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - run: echo "kubectl apply -f k8s/frontend/ (staging) with new image"
 
   deploy-production:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main'
     steps:
-      - run: echo "Deploying frontend to production environment"
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - run: echo "kubectl apply -f k8s/frontend/ (production) with new image"

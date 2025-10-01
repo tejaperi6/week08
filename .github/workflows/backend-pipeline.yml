@@ -1,7 +1,7 @@
 name: Backend Pipeline
 
 on:
-  workflow_call:   # 👈 makes it reusable by complete-pipeline.yml
+  workflow_call:
 
 jobs:
   test:
@@ -16,31 +16,39 @@ jobs:
         ports: ['5432:5432']
     steps:
       - uses: actions/checkout@v3
-      - name: Run Tests
-        run: echo "✅ Backend tests executed"
+      - name: Run Backend Tests
+        run: echo "✅ Running backend tests (replace with real test command later)"
 
   build:
     runs-on: ubuntu-latest
     needs: test
     steps:
       - uses: actions/checkout@v3
-      - name: Docker Login
-        run: echo "${{ secrets.AZURE_CREDENTIALS }}" | docker login myregistry.azurecr.io -u username --password-stdin
-      - name: Build & Push Docker Image
+      - name: Azure Docker Login
+        run: echo "${{ secrets.AZURE_CREDENTIALS }}" | docker login ${{ secrets.AZURE_CONTAINER_REGISTRY }} -u ${{ secrets.AZURE_REGISTRY_USERNAME }} --password-stdin
+      - name: Build & Push Backend Docker Image
         run: |
-          docker build -t myregistry.azurecr.io/backend:${{ github.sha }} backend/
-          docker push myregistry.azurecr.io/backend:${{ github.sha }}
+          docker build -t ${{ secrets.AZURE_CONTAINER_REGISTRY }}/backend:${{ github.sha }} backend/
+          docker push ${{ secrets.AZURE_CONTAINER_REGISTRY }}/backend:${{ github.sha }}
 
   deploy-staging:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/develop'
     steps:
-      - run: echo "🚀 Deploying backend to staging"
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Deploy Backend to Staging AKS
+        run: echo "kubectl apply -f k8s/backend/ (staging) with new image"
 
   deploy-production:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main'
     steps:
-      - run: echo "🚀 Deploying backend to production"
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Deploy Backend to Production AKS
+        run: echo "kubectl apply -f k8s/backend/ (production) with new image"
