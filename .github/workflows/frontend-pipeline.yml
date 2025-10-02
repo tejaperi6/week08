@@ -1,7 +1,15 @@
-name: Frontend CI/CD
+name: Frontend Pipeline
 
 on:
-  workflow_call:   # <--- only callable, not directly triggered
+  workflow_call:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "frontend/**"
+  pull_request:
+    branches: [ main, develop ]
 
 env:
   ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
@@ -10,14 +18,17 @@ env:
 jobs:
   lint_and_test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-      - run: cd frontend && npm install
-      - run: cd frontend && npm run lint || echo "⚠️ No lint configured"
-      - run: cd frontend && npm test || echo "⚠️ No tests configured"
+      - run: npm install
+      - run: npm run lint || echo "⚠️ No lint configured"
+      - run: npm test || echo "⚠️ No tests configured"
 
   build_and_push_image:
     runs-on: ubuntu-latest
