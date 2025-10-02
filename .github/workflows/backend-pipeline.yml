@@ -1,14 +1,7 @@
 name: Backend CI/CD
-#made changes
+
 on:
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - "backend/**"
-  pull_request:
-    branches: [ main, develop ]
+  workflow_call:   # reusable workflow
 
 env:
   ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
