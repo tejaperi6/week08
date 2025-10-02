@@ -1,17 +1,17 @@
-name: Frontend CI/CD
+name: Frontend Pipeline
 
 on:
-  pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'frontend/**'
   push:
     branches:
       - main
       - develop
     paths:
-      - 'frontend/**'
-      - '.github/workflows/frontend-pipeline.yml'
+      - "frontend/**"
+      - ".github/workflows/frontend-pipeline.yml"
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - "frontend/**"
   workflow_dispatch:
   workflow_call:
 
@@ -27,12 +27,9 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-      - run: npm install
-        working-directory: frontend
-      - run: npm run lint || echo "⚠️ No lint configured"
-        working-directory: frontend
-      - run: npm test || echo "⚠️ No tests configured"
-        working-directory: frontend
+      - run: cd frontend && npm install
+      - run: cd frontend && npm run lint || echo "⚠️ No lint configured"
+      - run: cd frontend && npm test || echo "⚠️ No tests configured"
 
   build_and_push_image:
     runs-on: ubuntu-latest
@@ -52,7 +49,6 @@ jobs:
     needs: build_and_push_image
     if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
       - uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
