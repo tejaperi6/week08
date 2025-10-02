@@ -1,7 +1,16 @@
 name: Backend CI/CD
 
 on:
-  workflow_call:   # reusable workflow
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-pipeline.yml"
+  pull_request:
+    branches: [ main, develop ]
+  workflow_call:
 
 env:
   ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
@@ -23,8 +32,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - run: pip install -r backend/product_service/requirements.txt
+      - run: |
+          pip install --upgrade pip
+          pip install pytest httpx
+          pip install -r backend/product_service/requirements.txt
+          pip install -r backend/order_service/requirements.txt
       - run: pytest backend/product_service/tests
+      - run: pytest backend/order_service/tests
 
   build-and-push:
     runs-on: ubuntu-latest

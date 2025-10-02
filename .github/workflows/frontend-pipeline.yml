@@ -1,8 +1,10 @@
 name: Frontend CI/CD
 
 on:
-  workflow_call:
-  workflow_dispatch:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
   push:
     branches:
       - main
@@ -10,10 +12,8 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-pipeline.yml'
-  pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'frontend/**'
+  workflow_dispatch:
+  workflow_call:
 
 env:
   ACR_LOGIN_SERVER: tejaacr98765.azurecr.io
@@ -28,8 +28,11 @@ jobs:
         with:
           node-version: 18
       - run: npm install
+        working-directory: frontend
       - run: npm run lint || echo "⚠️ No lint configured"
+        working-directory: frontend
       - run: npm test || echo "⚠️ No tests configured"
+        working-directory: frontend
 
   build_and_push_image:
     runs-on: ubuntu-latest
@@ -47,6 +50,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build_and_push_image
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v1
