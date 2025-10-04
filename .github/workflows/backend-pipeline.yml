@@ -1,45 +1,85 @@
-name: Backend CI/CD
+name: Backend Pipeline
 
 on:
-  push:
-    branches: [ main, develop ]
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-pipeline.yml"
   workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-pipeline.yml'
 
 env:
   ACR_LOGIN_SERVER: tejaacr98765.azurecr.io
-  IMAGE_TAG: ${{ github.sha }}
+  IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
 
 jobs:
-  build_and_push_backend:
+  build_and_deploy_backend:
     runs-on: ubuntu-latest
+    environment: Production
+
+    outputs:
+      PRODUCT_API_IP: ${{ steps.get_product_ip.outputs.external_ip }}
+      ORDER_API_IP: ${{ steps.get_order_ip.outputs.external_ip }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Login to ACR
+        run: az acr login --name tejaacr98765
+
       - name: Build & Push Product Service
         run: |
-          az acr login --name tejaacr98765
-          docker build -t ${{ env.ACR_LOGIN_SERVER }}/product_service:${{ env.IMAGE_TAG }} ./backend/product_service/
-          docker push ${{ env.ACR_LOGIN_SERVER }}/product_service:${{ env.IMAGE_TAG }}
+          docker build -t ${{ env.ACR_LOGIN_SERVER }}/product_service:latest ./backend/product_service/
+          docker push ${{ env.ACR_LOGIN_SERVER }}/product_service:latest
 
       - name: Build & Push Order Service
         run: |
-          docker build -t ${{ env.ACR_LOGIN_SERVER }}/order_service:${{ env.IMAGE_TAG }} ./backend/order_service/
-          docker push ${{ env.ACR_LOGIN_SERVER }}/order_service:${{ env.IMAGE_TAG }}
+          docker build -t ${{ env.ACR_LOGIN_SERVER }}/order_service:latest ./backend/order_service/
+          docker push ${{ env.ACR_LOGIN_SERVER }}/order_service:latest
 
-      - name: Deploy Backend
+      - name: Set AKS Context
         run: |
-          az aks get-credentials --resource-group rg-teja --name aks-teja --overwrite-existing
+          az aks get-credentials \
+            --resource-group rg-teja \
+            --name aks-teja \
+            --overwrite-existing
+
+      - name: Deploy Config + DBs
+        run: |
+          kubectl apply -f k8s/configmaps.yaml
+          kubectl apply -f k8s/secrets.yaml
           kubectl apply -f k8s/product-db.yaml
           kubectl apply -f k8s/order-db.yaml
+
+      - name: Deploy Product + Order Services
+        run: |
           kubectl apply -f k8s/product-service.yaml
           kubectl apply -f k8s/order-service.yaml
-          kubectl set image deployment/product-service-w08e1 product-service-container=${{ env.ACR_LOGIN_SERVER }}/product_service:${{ env.IMAGE_TAG }}
-          kubectl set image deployment/order-service-w08e1 order-service-container=${{ env.ACR_LOGIN_SERVER }}/order_service:${{ env.IMAGE_TAG }}
+
+      - name: Wait for Backend IPs
+        run: |
+          echo "Waiting up to 5 min..."
+          for i in $(seq 1 60); do
+            PRODUCT_IP=$(kubectl get svc product-service-w08e1 -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            ORDER_IP=$(kubectl get svc order-service-w08e1 -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            if [[ -n "$PRODUCT_IP" && -n "$ORDER_IP" ]]; then
+              echo "Product: $PRODUCT_IP, Order: $ORDER_IP"
+              echo "PRODUCT_IP=$PRODUCT_IP" >> $GITHUB_ENV
+              echo "ORDER_IP=$ORDER_IP" >> $GITHUB_ENV
+              break
+            fi
+            sleep 5
+          done
+
+      - id: get_product_ip
+        run: echo "external_ip=${{ env.PRODUCT_IP }}" >> $GITHUB_OUTPUT
+
+      - id: get_order_ip
+        run: echo "external_ip=${{ env.ORDER_IP }}" >> $GITHUB_OUTPUT

@@ -1,20 +1,29 @@
-name: Frontend CI/CD
+name: Frontend Pipeline
 
 on:
-  push:
-    branches: [ main, develop ]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-pipeline.yml"
   workflow_dispatch:
+    inputs:
+      product_api_ip:
+        description: "Product Service IP"
+        required: true
+      order_api_ip:
+        description: "Order Service IP"
+        required: true
+  push:
+    branches:
+      - develop
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-pipeline.yml'
 
 env:
   ACR_LOGIN_SERVER: tejaacr98765.azurecr.io
-  IMAGE_TAG: ${{ github.sha }}
+  IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
 
 jobs:
-  build_and_push_frontend:
+  build_and_deploy_frontend:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,14 +32,26 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Login to ACR
+        run: az acr login --name tejaacr98765
+
+      - name: Inject Backend IPs into main.js
+        run: |
+          sed -i "s|_PRODUCT_API_URL_|http://${{ github.event.inputs.product_api_ip }}:8000|g" frontend/main.js
+          sed -i "s|_ORDER_API_URL_|http://${{ github.event.inputs.order_api_ip }}:8001|g" frontend/main.js
+          cat frontend/main.js
+
       - name: Build & Push Frontend
         run: |
-          az acr login --name tejaacr98765
-          docker build -t ${{ env.ACR_LOGIN_SERVER }}/frontend:${{ env.IMAGE_TAG }} ./frontend/
-          docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:${{ env.IMAGE_TAG }}
+          docker build -t ${{ env.ACR_LOGIN_SERVER }}/frontend:latest ./frontend/
+          docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:latest
+
+      - name: Set AKS Context
+        run: |
+          az aks get-credentials \
+            --resource-group rg-teja \
+            --name aks-teja \
+            --overwrite-existing
 
       - name: Deploy Frontend
-        run: |
-          az aks get-credentials --resource-group rg-teja --name aks-teja --overwrite-existing
-          kubectl apply -f k8s/frontend.yaml
-          kubectl set image deployment/frontend frontend-container=${{ env.ACR_LOGIN_SERVER }}/frontend:${{ env.IMAGE_TAG }}
+        run: kubectl apply -f k8s/frontend.yaml
