@@ -8,5 +8,5 @@ jobs:
     uses: ./.github/workflows/backend-pipeline.yml
 
   frontend:
-    needs: backend
     uses: ./.github/workflows/frontend-pipeline.yml
+    needs: backend
