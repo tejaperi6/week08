@@ -1,20 +1,5 @@
 name: Frontend CI/CD - Build, Push and Deploy
-#triggering comment
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-###
 on:
   workflow_dispatch:
   push:
@@ -36,13 +21,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Docker login to ACR
-        run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ env.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Build and Push Frontend Image
         run: |
           docker build -t ${{ env.ACR_LOGIN_SERVER }}/frontend:latest ./frontend/
           docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:latest
+
+      - name: Logout from Azure
+        run: az logout
+        if: always()
 
   deploy_frontend:
     runs-on: ubuntu-latest
@@ -52,14 +43,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set AKS context
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set Kubernetes context (AKS)
         run: |
           az aks get-credentials \
             --resource-group rg-teja \
             --name aks-teja \
             --overwrite-existing
 
-      - name: Deploy Frontend
+      - name: Deploy Frontend Service
         run: |
-          cd k8s/
-          kubectl apply -f frontend.yaml
+          kubectl apply -f k8s/frontend.yaml

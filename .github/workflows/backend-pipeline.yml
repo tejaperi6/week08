@@ -10,12 +10,13 @@ on:
       - '.github/workflows/backend-pipeline.yml'
 
 env:
-  ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
-  IMAGE_TAG: ${{ github.sha }}
+  ACR_LOGIN_SERVER: tejaacr98765.azurecr.io
+  IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
 
 jobs:
   build_and_push_backends:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,22 +26,24 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Docker login
-        run: echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u "${{ secrets.ACR_USERNAME }}" --password-stdin
-
-      - name: Build & Push Product Service
+      - name: Build and Push Product Service Image
         run: |
-          docker build -t ${{ env.ACR_LOGIN_SERVER }}/product_service:${{ env.IMAGE_TAG }} ./backend/product_service/
-          docker push ${{ env.ACR_LOGIN_SERVER }}/product_service:${{ env.IMAGE_TAG }}
+          docker build -t ${{ env.ACR_LOGIN_SERVER }}/product_service:latest ./backend/product_service/
+          docker push ${{ env.ACR_LOGIN_SERVER }}/product_service:latest
 
-      - name: Build & Push Order Service
+      - name: Build and Push Order Service Image
         run: |
-          docker build -t ${{ env.ACR_LOGIN_SERVER }}/order_service:${{ env.IMAGE_TAG }} ./backend/order_service/
-          docker push ${{ env.ACR_LOGIN_SERVER }}/order_service:${{ env.IMAGE_TAG }}
+          docker build -t ${{ env.ACR_LOGIN_SERVER }}/order_service:latest ./backend/order_service/
+          docker push ${{ env.ACR_LOGIN_SERVER }}/order_service:latest
+
+      - name: Logout from Azure
+        run: az logout
+        if: always()
 
   deploy_backend:
     runs-on: ubuntu-latest
     needs: build_and_push_backends
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -50,28 +53,14 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Set AKS context
+      - name: Set Kubernetes context (AKS)
         run: |
           az aks get-credentials \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --name ${{ secrets.AZURE_AKS_CLUSTER }} \
+            --resource-group rg-teja \
+            --name aks-teja \
             --overwrite-existing
 
       - name: Deploy Backend Services
         run: |
           kubectl apply -f k8s/product-service.yaml
           kubectl apply -f k8s/order-service.yaml
-
-      - name: Wait for Backend IPs
-        run: |
-          echo "Waiting up to 5 min for Product/Order service IPs..."
-          for i in {1..60}; do
-            PRODUCT_IP=$(kubectl get svc product-service-w08e1 -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true)
-            ORDER_IP=$(kubectl get svc order-service-w08e1 -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true)
-            if [[ -n "$PRODUCT_IP" && -n "$ORDER_IP" ]]; then
-              echo "✅ Product Service IP: http://$PRODUCT_IP:8000"
-              echo "✅ Order Service IP:   http://$ORDER_IP:8001"
-              break
-            fi
-            sleep 5
-          done
