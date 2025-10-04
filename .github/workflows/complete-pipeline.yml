@@ -1,4 +1,4 @@
-name: Complete Pipeline (Backend + Frontend)
+name: Complete CI/CD - Backend + Frontend
 
 on:
   workflow_dispatch:
@@ -10,6 +10,3 @@ jobs:
   frontend:
     needs: backend
     uses: ./.github/workflows/frontend-pipeline.yml
-    with:
-      product_api_ip: ${{ needs.backend.outputs.PRODUCT_API_IP }}
-      order_api_ip: ${{ needs.backend.outputs.ORDER_API_IP }}
